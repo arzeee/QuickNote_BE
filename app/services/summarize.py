@@ -7,13 +7,9 @@ from app.pipelines.transcriber import Transcriber
 from app.pipelines.summarizer import Summarizer
 from app.pipelines.preprocessor import enhance_audio
 from app.helper import JSONLogger
-from app.pipelines.senopati_model import SenopatiModel  # <-- Tambahan
+from app.pipelines.senopati_model import SenopatiModel  
 
 load_dotenv()
-
-###########################
-#  Senopati Model Init    #
-###########################
 
 try:
     print("Initializing Senopati Local Model...")
@@ -43,7 +39,6 @@ def run_pipeline(
                denoise_enabled=denoise,
                aggressive_denoise=aggressive_denoise)
 
-    # === FILE VALIDATION ===
     if not input_file.exists():
         logger.log("FILE_VALIDATION", "ERROR", f"Input file not found: {input_file}")
         return {"error": f"File not found: {input_file}"}
@@ -56,7 +51,6 @@ def run_pipeline(
     logger.log("FILE_VALIDATION", "SUCCESS", "Input file validated", file_type=input_type)
     logger.log("AUDIO_CONVERSION", "INFO", "Starting audio format standardization")
     
-    # === VIDEO OR AUDIO CONVERSION ===
     if input_type in [".mp4", ".mkv", ".mov"]:
         logger.log("VIDEO_PROCESSING", "INFO", f"Processing video file: '{input_file.name}'")
         output_dir = Path("./data/audio")
@@ -85,7 +79,6 @@ def run_pipeline(
             audio_path = input_file
             logger.log("AUDIO_PROCESSING", "INFO", f"Using WAV file directly: {audio_path.name}")
 
-    # === AUDIO ENHANCEMENT ===
     if denoise or aggressive_denoise:
         logger.log("AUDIO_ENHANCEMENT", "INFO", "Starting audio enhancement", aggressive_mode=aggressive_denoise)
         enhanced_audio_path = enhance_audio(audio_path, aggressive_mode=aggressive_denoise)
@@ -97,7 +90,6 @@ def run_pipeline(
     else:
         logger.log("AUDIO_ENHANCEMENT", "INFO", "Audio enhancement skipped by user choice")
 
-    # === AI MODEL INIT (TRANSCRIBER & SUMMARIZER) ===
     logger.log("MODEL_INIT", "INFO", "Initializing AI models")
     try:
         transcriber = Transcriber(model_name=transcriber_model, senopati_model=senopati_model)
@@ -107,8 +99,7 @@ def run_pipeline(
         logger.log("MODEL_INIT", "ERROR", f"Initialization error: {e}")
         return {"error": f"Model initialization failed: {str(e)}"}
 
-
-    # === TRANSCRIPTION ===
+    # transcribe
     logger.log("TRANSCRIPTION", "INFO", f"Starting transcription of: {audio_path.name}")
     result, detected_language = transcriber.transcribe(audio_path, language=language)
     if result:
@@ -122,14 +113,14 @@ def run_pipeline(
         logger.log("TRANSCRIPTION", "ERROR", "Transcription failed")
         return {"error": "Transcription failed"}
 
-    # === CHUNKING ===
+    # chunking
     logger.log("TEXT_PROCESSING", "INFO", "Starting text processing and summarization")
     chunks = summarizer.chunk_text(transcript, chunk_size)
     logger.log("TEXT_CHUNKING", "SUCCESS", "Text split into chunks",
                num_chunks=len(chunks),
                chunk_size=chunk_size)
 
-    # === CLUSTERING ===
+    # clustering
     if len(chunks) > 7:
         logger.log("CLUSTERING", "INFO", "Clustering chunks by topic")
         clusters = summarizer.cluster_chunks(chunks)
@@ -139,7 +130,7 @@ def run_pipeline(
         clusters = {0: chunks}
         logger.log("CLUSTERING", "INFO", "Few Chunks - no clustering needed")
 
-    # === SUMMARIZATION ===
+    # summarize
     logger.log("SUMMARIZATION", "INFO", "Generating comprehensive summary")
     cluster_summaries, final_summary = summarizer.get_final_summary(clusters, language=detected_language)
     logger.log("SUMMARIZATION", "SUCCESS", "Final summary generated",
